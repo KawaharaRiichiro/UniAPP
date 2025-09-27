@@ -20,11 +20,9 @@ st.set_page_config(
 )
 
 # --- Streamlitのデータキャッシュ機能を使って、Supabaseからのデータ取得関数を定義 ---
-# アプリの再実行時にデータベースからデータを再取得するのを防ぎ、パフォーマンスを向上させます。
 @st.cache_data
 def load_tasks_data():
     """DataAccessからタスク一覧を取得し、キャッシュする関数"""
-    # DataAccess.pyで定義された関数を呼び出す
     return get_tasks_by_login_id_from_supabase()
 
 # --- メイン画面 ---
@@ -34,27 +32,33 @@ st.caption("あなたの大学受験をサポートします。")
 # --- ページ管理のためのセッション状態を初期化 ---
 if 'page' not in st.session_state:
     st.session_state.page = "タスク一覧"
+if 'add_success_message' not in st.session_state:
+    st.session_state.add_success_message = None
+# スケジュール用のサイドバー表示状態を管理
+if 'sidebar_date' not in st.session_state:
+    st.session_state.sidebar_date = None
+
 
 # --- ナビゲーションボタン ---
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    if st.button("タスク一覧", use_container_width=True, type="primary" if st.session_state.page == "タスク一覧" else "secondary"):
+    if st.button("✅ タスク一覧", use_container_width=True, type="primary" if st.session_state.page == "タスク一覧" else "secondary"):
         st.session_state.page = "タスク一覧"
 
 with col2:
-    if st.button("スケジュール", use_container_width=True, type="primary" if st.session_state.page == "スケジュール" else "secondary"):
+    if st.button("🗓️ スケジュール", use_container_width=True, type="primary" if st.session_state.page == "スケジュール" else "secondary"):
         st.session_state.page = "スケジュール"
 
 with col3:
-    if st.button("大学追加", use_container_width=True, type="primary" if st.session_state.page == "大学追加" else "secondary"):
+    if st.button("➕ 大学追加", use_container_width=True, type="primary" if st.session_state.page == "大学追加" else "secondary"):
         st.session_state.page = "大学追加"
 
 st.divider()
 
 # --- 選択されたページに応じてコンテンツを表示 ---
 if st.session_state.page == "タスク一覧":
-    st.header("タスク一覧")
+    st.header("✅ タスク一覧")
     st.write("ここでは、出願に必要なタスクを一覧で確認・管理できます。**完了ステータス**やお気に入りをチェックして進捗を管理しましょう。")
     
     # データをロード
@@ -67,106 +71,85 @@ if st.session_state.page == "タスク一覧":
         # ----------------------------------------
         # 1. フィルタリング機能
         # ----------------------------------------
+        with st.container(border=True):
+            st.markdown("##### 表示フィルター")
+            filter_col1, filter_col2, _ = st.columns([1, 1, 3])
+            
+            status_options = ["すべて", "未完了のみ", "完了済みのみ"]
+            with filter_col1:
+                st.caption("完了ステータス") 
+                selected_status_filter = st.selectbox(
+                    "完了ステータス", options=status_options, key="status_filter",
+                    label_visibility="collapsed"
+                )
+            
+            favorite_options = ["すべて", "お気に入りのみ"]
+            with filter_col2:
+                st.caption("お気に入り") 
+                selected_favorite_filter = st.selectbox(
+                    "お気に入り", options=favorite_options, key="favorite_filter",
+                    label_visibility="collapsed"
+                )
         
-        # st.subheader("表示フィルター") の代わりに、文字を小さくする
-        st.markdown("##### 表示フィルター", unsafe_allow_html=True)
-        
-        filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 3])
-        
-        # A. 完了ステータスのフィルター
-        status_options = ["すべて", "未完了のみ", "完了済みのみ"]
-        with filter_col1:
-            # ラベルの代わりにst.captionを使用
-            st.caption("完了ステータス") 
-            selected_status_filter = st.selectbox(
-                "完了ステータス",
-                options=status_options,
-                key="status_filter",
-                label_visibility="collapsed" # selectbox自体のラベルを非表示にする
-            )
-        
-        # B. お気に入りのフィルター
-        favorite_options = ["すべて", "お気に入りのみ"]
-        with filter_col2:
-            # ラベルの代わりにst.captionを使用
-            st.caption("お気に入り") 
-            selected_favorite_filter = st.selectbox(
-                "お気に入り",
-                options=favorite_options,
-                key="favorite_filter",
-                label_visibility="collapsed" # selectbox自体のラベルを非表示にする
-            )
-        
-        # フィルタリングの実行 (ロジックに変更なし)
+        # フィルタリングの実行
         filtered_df = tasks_df.copy()
-
-        # 完了ステータスによる絞り込み
         if selected_status_filter == "未完了のみ":
             filtered_df = filtered_df[filtered_df['完了ステータス'] == False]
         elif selected_status_filter == "完了済みのみ":
             filtered_df = filtered_df[filtered_df['完了ステータス'] == True]
 
-        # お気に入りによる絞り込み
         if selected_favorite_filter == "お気に入りのみ":
             filtered_df = filtered_df[filtered_df['お気に入り'] == True]
 
-        st.divider()
+        # st.divider() # コンテナで囲んだため、dividerは不要に
         
         # ----------------------------------------
-        # 2. データエディタの表示とDB更新ロジック (変更なし)
+        # 2. データエディタの表示とDB更新ロジック
         # ----------------------------------------
-        
         if filtered_df.empty:
-            st.info("現在のフィルター条件に一致するタスクはありません。フィルター設定を変更してください。")
-            st.stop() 
+            st.info("現在のフィルター条件に一致するタスクはありません。")
+        else:
+            column_config = {
+                "universityid": None, 
+                "taskid": None,
+                "完了ステータス": st.column_config.CheckboxColumn(default=False),
+                "お気に入り": st.column_config.CheckboxColumn(default=False),
+            }
 
-        # 表示用のDataFrameを作成（ID列を非表示にする）
-        display_df = filtered_df.drop(columns=['universityid', 'taskid'])
-        
-        # st.data_editor でテーブルを表示し、変更を検知
-        st.data_editor(
-            display_df,
-            column_config={
-                # ... (省略)
-            },
-            hide_index=True,
-            use_container_width=True,
-            key="tasks_data_editor"
-        )
+            st.data_editor(
+                filtered_df,
+                column_config=column_config,
+                hide_index=True,
+                use_container_width=True,
+                key="tasks_data_editor"
+            )
 
-        # 3. 編集内容をDBに反映するロジック (変更なし)
-        edited_cells = st.session_state.tasks_data_editor.get('edited_cells')
-        
-        if edited_cells:
-            st.toast("タスク情報を更新しています...")
-
-            # ... (DB更新ロジックの詳細は省略) ...
-            for index_str, changed_cols in edited_cells.items():
-                positional_index = int(index_str) 
-                original_row_index = filtered_df.index[positional_index]
-                original_row = tasks_df.loc[original_row_index]
-                university_id = int(original_row['universityid'])
-                task_id = int(original_row['taskid'])
-                
-                for col_name, new_value in changed_cols.items():
-                    if col_name == '完了ステータス':
-                        update_task_status(university_id, task_id, new_value)
-                    elif col_name == 'お気に入り':
-                        update_favorite_status(university_id, task_id, new_value)
-            
-            st.cache_data.clear()
-            st.toast("タスク情報が正常に更新されました！", icon="✅")
-            st.rerun() 
+            if 'edited_rows' in st.session_state.tasks_data_editor:
+                edited_rows = st.session_state.tasks_data_editor['edited_rows']
+                if edited_rows:
+                    st.toast("タスク情報を更新しています...")
+                    
+                    for row_index, changes in edited_rows.items():
+                        original_row = filtered_df.iloc[row_index]
+                        university_id = int(original_row['universityid'])
+                        task_id = int(original_row['taskid'])
+                        
+                        if '完了ステータス' in changes:
+                            update_task_status(university_id, task_id, changes['完了ステータス'])
+                        if 'お気に入り' in changes:
+                            update_favorite_status(university_id, task_id, changes['お気に入り'])
+                    
+                    st.cache_data.clear()
+                    st.toast("タスク情報が正常に更新されました！", icon="✅")
+                    st.rerun() 
             
     else:
         st.info("現在登録されているタスクはありません。「大学追加」ページから大学を登録してください。")
 
 
-
-
 elif st.session_state.page == "スケジュール":
-    st.header("スケジュール")
-    st.write("出願関連のスケジュールをカレンダー形式で確認できます。日付をクリックすると、その日のタスクが表示されます。")
+    st.header("🗓️ スケジュール")
+    st.write("出願関連のスケジュールをカレンダー形式で確認できます。日付をクリックすると、サイドバーにその日のタスクが表示されます。")
 
     with st.spinner('スケジュールデータをロード中...'):
         tasks_df = load_tasks_data()
@@ -174,7 +157,7 @@ elif st.session_state.page == "スケジュール":
     if tasks_df.empty:
         st.info("カレンダーに表示するタスクがありません。")
     else:
-        # --- 1. 色分けの設定 ---
+        # --- データ準備 (変更なし) ---
         color_palette = [
             "#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF", 
             "#A0C4FF", "#BDB2FF", "#FFC6FF", "#FFFFFC", "#DDDDDD"
@@ -184,8 +167,6 @@ elif st.session_state.page == "スケジュール":
             uni: color_palette[i % len(color_palette)] 
             for i, uni in enumerate(unique_universities)
         }
-
-        # --- 2. カレンダーイベント用のリストを作成 ---
         calendar_events = []
         valid_tasks_df = tasks_df[
             (tasks_df['完了ステータス'] == False) & 
@@ -194,80 +175,82 @@ elif st.session_state.page == "スケジュール":
         valid_tasks_df['parsed_date'] = pd.to_datetime(valid_tasks_df['実施日/期日'], errors='coerce').dt.date
 
         for index, row in valid_tasks_df.iterrows():
-            university_name = row['大学学部名']
-            task_name = row['タスク名']
-            event_title = f"【{university_name}】{task_name}"
-            event_start_date = row['実施日/期日']
-            
+            event_title = f"【{row['大学学部名']}】{row['タスク名']}"
             calendar_events.append({
-                "title": event_title,
-                "start": event_start_date,
-                "allDay": True,
-                "backgroundColor": university_colors.get(university_name, "#DDDDDD"),
-                "borderColor": university_colors.get(university_name, "#DDDDDD"),
+                "title": event_title, "start": row['実施日/期日'], "allDay": True,
+                "backgroundColor": university_colors.get(row['大学学部名'], "#DDDDDD"),
+                "borderColor": university_colors.get(row['大学学部名'], "#DDDDDD"),
                 "textColor": "#000000",
             })
         
         calendar_options = {
-            "headerToolbar": {
-                "left": "today,prev,next",
-                "center": "title",
-                "right": "dayGridMonth,timeGridWeek,timeGridDay",
-            },
-            "initialView": "dayGridMonth",
-            "locale": "ja",
-            "selectable": True,
+            "headerToolbar": {"left": "today,prev,next", "center": "title", "right": "dayGridMonth,timeGridWeek,timeGridDay"},
+            "initialView": "dayGridMonth", "locale": "ja", "selectable": True,
         }
 
-        clicked_info = calendar(
-            events=calendar_events,
-            options=calendar_options,
-            key="schedule_calendar"
-        )
+        # --- カレンダーの表示とクリック処理 ---
+        clicked_info = calendar(events=calendar_events, options=calendar_options, key="schedule_calendar")
 
-        # --- 3. 日付がクリックされた場合の処理 ---
         if clicked_info and clicked_info.get("dateClick"):
             clicked_date_str = clicked_info["dateClick"]["date"]
             original_date = pd.to_datetime(clicked_date_str).date()
-            corrected_date = original_date + timedelta(days=1)
-            
-            tasks_on_date = valid_tasks_df[valid_tasks_df['parsed_date'] == corrected_date]
+            # サイドバーに表示する日付をセッションに保存
+            st.session_state.sidebar_date = original_date + timedelta(days=1)
+            # st.rerun() # rerunは不要。セッション更新で再描画される
 
+    # サイドバーに表示する日付がセッションに保存されている場合のみ、サイドバーを表示
+    if st.session_state.sidebar_date:
+        with st.sidebar:
+            # 閉じるボタンのコールバック関数
+            def close_sidebar():
+                st.session_state.sidebar_date = None
+
+            st.header(f"{st.session_state.sidebar_date.strftime('%Y-%m-%d')} のタスク")
+            st.button("✖️ 閉じる", on_click=close_sidebar, use_container_width=True)
             st.divider()
-            st.subheader(f"{corrected_date.strftime('%Y-%m-%d')} のタスク一覧")
-            
+
+            # サイドバーに表示するタスクをフィルタリング
+            tasks_on_date = valid_tasks_df[valid_tasks_df['parsed_date'] == st.session_state.sidebar_date]
+
             if not tasks_on_date.empty:
                 for index, row in tasks_on_date.iterrows():
-                    with st.container(border=True):
-                        st.markdown(f"**{row['大学学部名']}**")
-                        st.write(row['タスク名'])
+                    university_id = int(row['universityid'])
+                    task_id = int(row['taskid'])
+                    
+                    st.markdown(f"**{row['大学学部名']}**")
+                    
+                    checkbox_key = f"sidebar_task_{university_id}_{task_id}"
+                    if st.checkbox(row['タスク名'], key=checkbox_key):
+                        update_task_status(university_id, task_id, True)
+                        st.toast(f"タスク「{row['タスク名']}」を完了しました！", icon="🎉")
+                        st.cache_data.clear()
+                        close_sidebar() # 完了したらサイドバーを閉じる
+                        st.rerun()
             else:
                 st.info("この日には未完了のタスクはありません。")
 
-# main.py の該当箇所
 
 elif st.session_state.page == "大学追加":
-    st.header("大学追加")
+    st.header("➕ 大学追加")
     st.write("受験する大学や学部を追加登録します。")
 
-    # 1. 未登録の大学名とIDのリストを取得
+    if st.session_state.add_success_message:
+        st.success(st.session_state.add_success_message)
+        st.session_state.add_success_message = None
+
     unregistered_universities_data = get_unregistered_universities()
     
     if unregistered_universities_data:
-        # 選択肢として表示するための大学名リストを作成
         university_names = [d['universityname'] for d in unregistered_universities_data]
         
-        # 2. ドロップダウンリストを表示
         selected_university_name = st.selectbox(
             "追加する大学を選択してください:",
             university_names,
-            index=None, # 初期値はなし
+            index=None,
             placeholder="大学名を選択..."
         )
 
-        # 3. 追加ボタンの配置と処理
         if selected_university_name:
-            # 選択された大学名から対応する University ID を検索
             selected_university_id = next(
                 (d['universityid'] for d in unregistered_universities_data if d['universityname'] == selected_university_name), 
                 None
@@ -280,11 +263,8 @@ elif st.session_state.page == "大学追加":
                         result = add_tasks_for_user(selected_university_id)
                     
                     if result.get("status") == "success":
-                        st.success(f"**{selected_university_name}** の出願タスクを正常に追加しました！")
-                        # タスク一覧ページを最新の状態にするため、キャッシュをクリア
+                        st.session_state.add_success_message = f"**{selected_university_name}** の出願タスクを正常に追加しました！"
                         st.cache_data.clear()
-                        # 成功後、タスク一覧ページに遷移
-                        st.session_state.page = "タスク一覧"
                         st.rerun()
                     else:
                         st.error(f"タスクの追加に失敗しました。エラー: {result.get('error')}")
@@ -292,3 +272,4 @@ elif st.session_state.page == "大学追加":
                     st.error("エラー：選択された大学のIDが見つかりませんでした。")
     else:
         st.success("すべての大学のタスクが登録済みです！")
+
