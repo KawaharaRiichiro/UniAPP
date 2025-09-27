@@ -220,3 +220,4 @@ def get_unregistered_universities() -> list:
         print(f"データの取得中にエラーが発生しました: {e}")
         return []
     
+    
