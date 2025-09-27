@@ -6,8 +6,8 @@ from DataAccess import (
     get_tasks_by_login_id_from_supabase, 
     get_unregistered_universities, 
     add_tasks_for_user,
-    update_favorite_status,
-    update_task_status
+    update_task_status,
+    update_favorite_status 
 )
 
 
@@ -53,20 +53,79 @@ st.divider()
 # --- 選択されたページに応じてコンテンツを表示 ---
 if st.session_state.page == "タスク一覧":
     st.header("タスク一覧")
-    st.cache_data.clear() 
-    st.write("ここでは、出願に必要なタスクを一覧で確認・管理できます。")
+    st.write("ここでは、出願に必要なタスクを一覧で確認・管理できます。**完了ステータス**やお気に入りをチェックして進捗を管理しましょう。")
     
     # データをロードし、進捗状況を表示
     with st.spinner('タスクデータをロード中...'):
-        tasks_df = load_tasks_data() # キャッシュされた関数を呼び出し、タスク一覧を取得
+        # DataAccess.pyの修正により、tasks_dfにはID列が含まれています
+        tasks_df = load_tasks_data() 
     
-    # データの表示
+    # データの表示と編集ロジック
     if not tasks_df.empty:
-        # 取得したDataFrameをStreamlitに表示
-        st.dataframe(tasks_df, use_container_width=True)
+        
+        # 1. 表示用のDataFrameを作成（ID列を非表示にする）
+        display_df = tasks_df.drop(columns=['universityid', 'taskid'])
+        
+        # 2. st.data_editor でテーブルを表示し、変更を検知
+        # 完了ステータスとお気に入りの列をチェックボックスとして表示するように設定
+        edited_df = st.data_editor(
+            display_df,
+            column_config={
+                "完了ステータス": st.column_config.CheckboxColumn(
+                    "完了ステータス",
+                    help="タスクが完了したらチェック",
+                    default=False
+                ),
+                "お気に入り": st.column_config.CheckboxColumn(
+                    "お気に入り",
+                    help="重要なタスクにチェック",
+                    default=False
+                ),
+                # ID列を非表示にしたため、ここでの設定は不要です
+            },
+            hide_index=True,
+            use_container_width=True,
+        )
+
+        # 3. 編集内容をDBに反映するロジック
+        if edited_df is not None:
+            
+            # 変更されたデータフレームと元のデータフレームを比較
+            # Streamlitのdata_editorは、変更された部分を.edited_cellsとして返します
+            changed_rows = st.session_state.get('data_editor', {}).get('edited_cells')
+            
+            # 変更があった場合のみ処理を実行
+            if changed_rows:
+                
+                # 変更された行のインデックスを取得 (edited_dfはdisplay_dfと同じインデックスを持つ)
+                for index, changed_cols in changed_rows.items():
+                    
+                    # 変更されたタスクのIDを取得
+                    original_row = tasks_df.iloc[index]
+                    university_id = int(original_row['universityid'])
+                    task_id = int(original_row['taskid'])
+                    
+                    # 変更された列を特定し、DBを更新
+                    for col_name, new_value in changed_cols.items():
+                        
+                        # 完了ステータスの変更
+                        if col_name == '完了ステータス':
+                            # DB更新関数を呼び出し
+                            update_task_status(university_id, task_id, new_value)
+                            # キャッシュをクリアし、テーブルを更新
+                            st.cache_data.clear()
+                            st.rerun() # 変更を反映するために再実行
+                            
+                        # お気に入りの変更
+                        elif col_name == 'お気に入り':
+                            # DB更新関数を呼び出し
+                            update_favorite_status(university_id, task_id, new_value)
+                            # キャッシュをクリアし、テーブルを更新
+                            st.cache_data.clear()
+                            st.rerun() # 変更を反映するために再実行
+                            
     else:
-        # データが空の場合のメッセージ
-        st.warning("タスクデータが見つからないか、データベースからのロード中にエラーが発生しました。")
+        st.info("現在登録されているタスクはありません。「大学追加」ページから大学を登録してください。")
 
 
 elif st.session_state.page == "スケジュール":
