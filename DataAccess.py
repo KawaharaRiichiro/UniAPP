@@ -1,5 +1,5 @@
 import pandas as pd
-from supabase import create_client, Client
+from supabase.client import create_client, Client
 import os
 
 # --- Supabaseの接続情報 ---
