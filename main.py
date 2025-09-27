@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd # DataFrameを扱うため追加
+from streamlit_calendar import calendar
+from datetime import timedelta
 
 # DataAccess.pyから必要な関数をインポート
 from DataAccess import (
@@ -69,11 +71,87 @@ if st.session_state.page == "タスク一覧":
         st.warning("タスクデータが見つからないか、データベースからのロード中にエラーが発生しました。")
 
 
+
+
 elif st.session_state.page == "スケジュール":
     st.header("スケジュール")
-    st.write("出願関連のスケジュールをカレンダー形式で確認できます。")
-    # 今後のステップで、ここにカレンダー機能を追加していきます。
-    st.info("（ここにスケジュールカレンダーが表示される予定です）")
+    st.write("出願関連のスケジュールをカレンダー形式で確認できます。日付をクリックすると、その日のタスクが表示されます。")
+
+    with st.spinner('スケジュールデータをロード中...'):
+        tasks_df = load_tasks_data()
+
+    if tasks_df.empty:
+        st.info("カレンダーに表示するタスクがありません。")
+    else:
+        # --- 1. 色分けの設定 ---
+        color_palette = [
+            "#FFADAD", "#FFD6A5", "#FDFFB6", "#CAFFBF", "#9BF6FF", 
+            "#A0C4FF", "#BDB2FF", "#FFC6FF", "#FFFFFC", "#DDDDDD"
+        ]
+        unique_universities = tasks_df['大学学部名'].unique()
+        university_colors = {
+            uni: color_palette[i % len(color_palette)] 
+            for i, uni in enumerate(unique_universities)
+        }
+
+        # --- 2. カレンダーイベント用のリストを作成 ---
+        calendar_events = []
+        valid_tasks_df = tasks_df[
+            (tasks_df['完了ステータス'] == False) & 
+            (pd.to_datetime(tasks_df['実施日/期日'], errors='coerce').notna())
+        ].copy()
+        valid_tasks_df['parsed_date'] = pd.to_datetime(valid_tasks_df['実施日/期日'], errors='coerce').dt.date
+
+        for index, row in valid_tasks_df.iterrows():
+            university_name = row['大学学部名']
+            task_name = row['タスク名']
+            event_title = f"【{university_name}】{task_name}"
+            event_start_date = row['実施日/期日']
+            
+            calendar_events.append({
+                "title": event_title,
+                "start": event_start_date,
+                "allDay": True,
+                "backgroundColor": university_colors.get(university_name, "#DDDDDD"),
+                "borderColor": university_colors.get(university_name, "#DDDDDD"),
+                "textColor": "#000000",
+            })
+        
+        calendar_options = {
+            "headerToolbar": {
+                "left": "today,prev,next",
+                "center": "title",
+                "right": "dayGridMonth,timeGridWeek,timeGridDay",
+            },
+            "initialView": "dayGridMonth",
+            "locale": "ja",
+            "selectable": True,
+        }
+
+        clicked_info = calendar(
+            events=calendar_events,
+            options=calendar_options,
+            key="schedule_calendar"
+        )
+
+        # --- 3. 日付がクリックされた場合の処理 ---
+        if clicked_info and clicked_info.get("dateClick"):
+            clicked_date_str = clicked_info["dateClick"]["date"]
+            original_date = pd.to_datetime(clicked_date_str).date()
+            corrected_date = original_date + timedelta(days=1)
+            
+            tasks_on_date = valid_tasks_df[valid_tasks_df['parsed_date'] == corrected_date]
+
+            st.divider()
+            st.subheader(f"{corrected_date.strftime('%Y-%m-%d')} のタスク一覧")
+            
+            if not tasks_on_date.empty:
+                for index, row in tasks_on_date.iterrows():
+                    with st.container(border=True):
+                        st.markdown(f"**{row['大学学部名']}**")
+                        st.write(row['タスク名'])
+            else:
+                st.info("この日には未完了のタスクはありません。")
 
 # main.py の該当箇所
 
