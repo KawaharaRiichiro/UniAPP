@@ -1,4 +1,4 @@
 streamlit
 pandas
 supabase-py
-streamlit_calendar
+streamlit_calendar==0.0.9 
