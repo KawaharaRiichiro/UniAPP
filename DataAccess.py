@@ -57,10 +57,10 @@ def get_tasks_by_login_id_from_supabase() -> pd.DataFrame:
     df = pd.merge(df, due_date_master, on=['universityid', 'taskid'], how='left')
 
     # 必要な列だけを抽出します
-    result_df = df[['universityname', 'taskname', 'duedate', 'statusflag', 'favoriteflag']]
+    result_df = df[['universityid', 'taskid', 'universityname', 'taskname', 'duedate', 'statusflag', 'favoriteflag']]
 
-    # DataFrameの列名を日本語化
-    result_df.columns = ['大学学部名', 'タスク名', '実施日/期日', '完了ステータス', 'お気に入り']
+    # DataFrameの列名を日本語化（ID列は日本語化しない）
+    result_df.columns = ['universityid', 'taskid', '大学学部名', 'タスク名', '実施日/期日', '完了ステータス', 'お気に入り']
 
     return result_df
 
